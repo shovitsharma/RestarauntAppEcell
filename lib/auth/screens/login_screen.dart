@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/firebase_auth_service.dart';
+import '../widgets/form_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -9,6 +10,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  
   final FirebaseAuthService _authService = FirebaseAuthService();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
@@ -16,109 +18,205 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _verificationId;
   bool _isOtpSent = false;
   bool _isLoading = false;
+  String? _errorMessage; // For displaying errors to the user
 
   void _onSendOtp() async {
     if (_phoneController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a phone number")),
-      );
+      setState(() => _errorMessage = "Please enter a phone number");
       return;
     }
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null; // Clear previous errors
+    });
 
-    // IMPORTANT: Add your country code!
     String phoneNumber = "+91${_phoneController.text.trim()}";
 
-    await _authService.sendOtp(
-      phoneNumber: phoneNumber,
-      context: context,
-      codeSent: (verificationId) {
-        setState(() {
-          _verificationId = verificationId;
-          _isOtpSent = true;
-          _isLoading = false;
-        });
-      },
-    );
+    try {
+      await _authService.sendOtp(
+        phoneNumber: phoneNumber,
+        context: context,
+        codeSent: (verificationId) {
+          setState(() {
+            _verificationId = verificationId;
+            _isOtpSent = true;
+            _isLoading = false;
+          });
+        },
+      );
+    } catch (e) {
+      // Handle errors thrown by the service
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
+    }
   }
 
   void _onVerifyOtp() async {
     if (_verificationId == null || _otpController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter the OTP")),
-      );
+      setState(() => _errorMessage = "Please enter the OTP");
       return;
     }
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null; // Clear previous errors
+    });
+    bool success = false;
+    try {
+      success = await _authService.verifyOtp(
+        verificationId: _verificationId!,
+        smsCode: _otpController.text.trim(),
+        context: context,
+      );
+    } catch (e) {
+      // Handle errors thrown by the service
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
+    }
+    
 
-    bool success = await _authService.verifyOtp(
-      verificationId: _verificationId!,
-      smsCode: _otpController.text.trim(),
-      context: context,
-    );
-
-    setState(() { _isLoading = false; });
+    setState(() {
+      _isLoading = false;
+    });
 
     if (success) {
-      // Navigate to your home screen or dashboard on successful login
-      // For now, just show a success message
+      // Navigate to your admin home screen on successful login
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Login Successful!")),
+        const SnackBar(
+          content: Text("Login Successful!"),
+          backgroundColor: Colors.green, // Themed success message
+        ),
       );
     }
   }
 
   @override
+  void dispose() {
+    _phoneController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+  // --- End of your logic ---
+
+  @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text("Admin Login"),
+        title: Text(
+          "Admin Login",
+          style: textTheme.titleLarge?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+        ),
+        backgroundColor: Colors.transparent, // Make app bar transparent
+        elevation: 0, // Remove shadow
+        iconTheme: IconThemeData(
+          color: colorScheme.onSurface, // Icon color for back button
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // --- Phone Number Input ---
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: "Phone Number",
-                prefixText: "+91 ",
-                border: OutlineInputBorder(),
-              ),
-              enabled: !_isOtpSent,
-            ),
-            const SizedBox(height: 20),
-
-            // --- OTP Input (conditional) ---
-            if (_isOtpSent)
-              TextField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "OTP",
-                  border: OutlineInputBorder(),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Restaurant/Admin themed Icon
+                Icon(
+                  _isOtpSent ? Icons.vpn_key : Icons.manage_accounts,
+                  size: 100,
+                  color: colorScheme.primary,
                 ),
-              ),
-            const SizedBox(height: 30),
+                const SizedBox(height: 25),
 
-            // --- Button ---
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading
-                    ? null
-                    : (_isOtpSent ? _onVerifyOtp : _onSendOtp),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(_isOtpSent ? "Verify OTP" : "Send OTP"),
-              ),
+                // Title
+                Text(
+                  _isOtpSent
+                      ? 'Enter Your OTP'
+                      : 'Sign in to your Admin Panel',
+                  style: textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 25),
+
+                // --- Phone Number Input ---
+               
+                MyTextField(
+                  controller: _phoneController,
+                  hintText: 'Phone Number',
+                  obscureText: false,
+                  
+                ),
+                const SizedBox(height: 10),
+
+                // --- OTP Input (conditional) ---
+                if (_isOtpSent)
+                  MyTextField(
+                    controller: _otpController,
+                    hintText: '6-Digit OTP',
+                    obscureText: false,
+                    // keyboardType: TextInputType.number,
+                  ),
+                const SizedBox(height: 25),
+
+                // --- Error Message Display ---
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 20.0),
+                    child: Text(
+                      _errorMessage!,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.error,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+
+                // --- Button ---
+                
+                MyButton(
+                  onTap: _isOtpSent ? _onVerifyOtp : _onSendOtp,
+                  text: _isOtpSent ? 'Verify OTP' : 'Send OTP',
+                  isLoading: _isLoading,
+                ),
+
+                // --- Resend OTP / Change Number ---
+                if (_isOtpSent)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20.0),
+                    child: TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              setState(() {
+                                _isOtpSent = false;
+                                _errorMessage = null; // Clear error
+                                _verificationId = null;
+                                _otpController.clear();
+                              });
+                            },
+                      child: Text(
+                        'Change Phone Number',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
