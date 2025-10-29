@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart'; // <-- 1. IMPORT GOOGLE FONTS
 import 'package:firebase_core/firebase_core.dart';
+import 'package:untitled2/auth/screens/splash_screen.dart';
 import 'firebase_options.dart';
-import 'auth/screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,10 +20,10 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       title: 'Restaurant App',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.amber,
+          seedColor: Colors.amber, 
           brightness: Brightness.light,
         ),
         
@@ -51,7 +51,7 @@ class MyApp extends StatelessWidget {
         
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }
