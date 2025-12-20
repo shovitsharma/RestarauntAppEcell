@@ -49,7 +49,7 @@ class MyTextField extends StatelessWidget {
         ),
         filled: true,
         fillColor: enabled
-            ? theme.colorScheme.surfaceVariant
+            ? theme.colorScheme.surfaceContainerHighest
             : theme.colorScheme.onSurface.withOpacity(0.05),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
