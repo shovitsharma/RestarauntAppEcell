@@ -1,98 +1,111 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:untitled2/utils/snackbar_helper.dart';
+import 'package:untitled2/inventory/screens/inventory_list_screen.dart'; // <-- Correct Import
 import '../services/firebase_auth_service.dart';
 import '../widgets/form_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  
   final FirebaseAuthService _authService = FirebaseAuthService();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
 
-  String? _verificationId;
-  bool _isOtpSent = false;
   bool _isLoading = false;
-  String? _errorMessage; // For displaying errors to the user
+  bool _isOtpSent = false;
+  String? _verificationId;
+  int? _resendToken;
 
   void _onSendOtp() async {
-    if (_phoneController.text.isEmpty) {
-      setState(() => _errorMessage = "Please enter a phone number");
+    _otpController.clear();
+    if (_phoneController.text.length < 10) {
+      showCustomSnackBar(context, message: 'Please enter a valid 10-digit phone number.', isError: true);
       return;
     }
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null; // Clear previous errors
-    });
-
-    String phoneNumber = "+91${_phoneController.text.trim()}";
+    setState(() => _isLoading = true);
 
     try {
+      String phoneNumber = "+91${_phoneController.text.trim()}";
       await _authService.sendOtp(
         phoneNumber: phoneNumber,
-        context: context,
-        codeSent: (verificationId) {
-          setState(() {
-            _verificationId = verificationId;
-            _isOtpSent = true;
-            _isLoading = false;
-          });
+        forceResendingToken: _resendToken,
+        onCodeSent: (verificationId, resendToken) {
+          if (mounted) {
+            setState(() {
+              _verificationId = verificationId;
+              _resendToken = resendToken;
+              _isOtpSent = true;
+            });
+          }
+          showCustomSnackBar(context, message: 'OTP has been sent!');
         },
       );
+    } on FirebaseAuthException catch (e) {
+      showCustomSnackBar(context, message: e.message ?? 'An unknown Firebase error occurred.', isError: true);
     } catch (e) {
-      // Handle errors thrown by the service
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString();
-      });
+      showCustomSnackBar(context, message: 'An unknown error occurred. Please try again.', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   void _onVerifyOtp() async {
-    if (_verificationId == null || _otpController.text.isEmpty) {
-      setState(() => _errorMessage = "Please enter the OTP");
-      return;
-    }
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null; // Clear previous errors
-    });
-    bool success = false;
-    try {
-      success = await _authService.verifyOtp(
-        verificationId: _verificationId!,
-        smsCode: _otpController.text.trim(),
-        context: context,
-      );
-    } catch (e) {
-      // Handle errors thrown by the service
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString();
-      });
-    }
+  if (_verificationId == null || _otpController.text.isEmpty) {
+    showCustomSnackBar(context, message: 'Please enter the OTP.', isError: true);
+    return;
+  }
+  setState(() => _isLoading = true);
+  print("--- Starting OTP Verification ---");
+
+  try {
+    await _authService.verifyOtp(
+      verificationId: _verificationId!,
+      smsCode: _otpController.text.trim(),
+    );
     
+    print(">>> STEP 1: Firebase verification SUCCEEDED.");
 
-    setState(() {
-      _isLoading = false;
-    });
+    showCustomSnackBar(context, message: 'Login Successful!');
 
-    if (success) {
-      // Navigate to your admin home screen on successful login
+    print(">>> STEP 2: 'Login Successful' SnackBar has been shown.");
+
+    if (mounted) {
+      print(">>> STEP 3: Widget is mounted. Attempting to navigate NOW...");
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Login Successful!"),
-          backgroundColor: Colors.green, // Themed success message
-        ),
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const InventoryListScreen()),
       );
+
+      print(">>> STEP 4: Navigation call has completed. If you see this, the screen should have changed.");
+
+    } else {
+      print(">>> ERROR: WIDGET WAS NOT MOUNTED! Cannot navigate.");
+    }
+
+  } on FirebaseAuthException catch (e, stackTrace) {
+    print(">>> ERROR: A FIREBASE AUTH EXCEPTION was caught!");
+    print(e.toString());
+    print(stackTrace);
+    showCustomSnackBar(context, message: e.message ?? 'Invalid OTP or an error occurred.', isError: true);
+  } catch (e, stackTrace) {
+    print(">>> ERROR: A GENERAL EXCEPTION was caught! This might be the navigation error.");
+    print(e.toString());
+    print(stackTrace);
+    showCustomSnackBar(context, message: 'An unknown error occurred. Please try again.', isError: true);
+  } finally {
+    print("--- FINALLY BLOCK: Setting isLoading to false. ---");
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   @override
   void dispose() {
@@ -100,27 +113,23 @@ class _LoginScreenState extends State<LoginScreen> {
     _otpController.dispose();
     super.dispose();
   }
-  // --- End of your logic ---
 
   @override
   Widget build(BuildContext context) {
+    // This is the UI from your teammate, which is correct.
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.background,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(
           "Admin Login",
-          style: textTheme.titleLarge?.copyWith(
-            color: colorScheme.onSurface,
-          ),
+          style: textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
         ),
-        backgroundColor: Colors.transparent, // Make app bar transparent
-        elevation: 0, // Remove shadow
-        iconTheme: IconThemeData(
-          color: colorScheme.onSurface, // Icon color for back button
-        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: colorScheme.onSurface),
       ),
       body: SafeArea(
         child: Center(
@@ -129,82 +138,45 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Restaurant/Admin themed Icon
                 Icon(
                   _isOtpSent ? Icons.vpn_key : Icons.manage_accounts,
                   size: 100,
                   color: colorScheme.primary,
                 ),
                 const SizedBox(height: 25),
-
-                // Title
                 Text(
-                  _isOtpSent
-                      ? 'Enter Your OTP'
-                      : 'Sign in to your Admin Panel',
+                  _isOtpSent ? 'Enter Your OTP' : 'Sign in to your Admin Panel',
                   style: textTheme.titleLarge,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 25),
-
-                // --- Phone Number Input ---
-               
                 MyTextField(
                   controller: _phoneController,
                   hintText: 'Phone Number',
                   obscureText: false,
-                  
+                  enabled: !_isOtpSent,
                 ),
                 const SizedBox(height: 10),
-
-                // --- OTP Input (conditional) ---
                 if (_isOtpSent)
                   MyTextField(
                     controller: _otpController,
                     hintText: '6-Digit OTP',
                     obscureText: false,
-                    // keyboardType: TextInputType.number,
+                    keyboardType: TextInputType.number,
                   ),
                 const SizedBox(height: 25),
-
-                // --- Error Message Display ---
-                if (_errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20.0),
-                    child: Text(
-                      _errorMessage!,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.error,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-
-                // --- Button ---
-                
                 MyButton(
                   onTap: _isOtpSent ? _onVerifyOtp : _onSendOtp,
                   text: _isOtpSent ? 'Verify OTP' : 'Send OTP',
                   isLoading: _isLoading,
                 ),
-
-                // --- Resend OTP / Change Number ---
                 if (_isOtpSent)
                   Padding(
                     padding: const EdgeInsets.only(top: 20.0),
                     child: TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              setState(() {
-                                _isOtpSent = false;
-                                _errorMessage = null; // Clear error
-                                _verificationId = null;
-                                _otpController.clear();
-                              });
-                            },
+                      onPressed: _isLoading ? null : _onSendOtp,
                       child: Text(
-                        'Change Phone Number',
+                        'Resend OTP',
                         style: textTheme.bodyMedium?.copyWith(
                           color: colorScheme.primary,
                         ),
@@ -219,4 +191,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
