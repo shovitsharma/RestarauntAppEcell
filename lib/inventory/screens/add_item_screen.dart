@@ -62,19 +62,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
     String imageUrl = '';
 
-    try {
-      // A. Upload Image to Cloudinary (if selected)
+try {
+      // A. Upload Image to Cloudinary
       if (_selectedImage != null) {
         final url = await _imageService.uploadImage(_selectedImage!);
+        
         if (url != null) {
           imageUrl = url;
         } else {
-          // If upload failed, we continue but warn the user (or you could return; to stop)
-          print("Warning: Image upload failed, saving without image.");
+          // 1. Upload Failed: Stop everything and throw error
+          throw Exception("Image upload failed. Please check your internet and try again.");
         }
       } else {
-        
-        imageUrl = 'https://placehold.co/400x300/png?text=No+Image';
+        // 2. No Image Selected: Stop everything and throw error
+        throw Exception("An image is required. Please select a photo.");
       }
 
       // B. Create the Model

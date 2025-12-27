@@ -77,15 +77,15 @@ class InventoryService {
     });
   }
 
-  // 3. Get items by specific category
-  Stream<List<MenuItemModel>> getItemsByCategory(String category) {
-    return _menuCollection
-        .where('category', isEqualTo: category)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => MenuItemModel.fromSnapshot(doc))
-            .toList());
-  }
+  // 3. Get items by specific category *will be used for customer side later on*
+  // Stream<List<MenuItemModel>> getItemsByCategory(String category) {
+  //   return _menuCollection
+  //       .where('category', isEqualTo: category)
+  //       .snapshots()
+  //       .map((snapshot) => snapshot.docs
+  //           .map((doc) => MenuItemModel.fromSnapshot(doc))
+  //           .toList());
+  // }
 
   // --- UPDATE ---
 

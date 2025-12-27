@@ -2,14 +2,14 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; 
 
 class ImageService {
   final ImagePicker _picker = ImagePicker();
   
-  // --- CONFIGURATION ---
-  // Replace these with YOUR actual values from Cloudinary Dashboard
-  final String cloudName = "ddkocwzxf"; 
-  final String uploadPreset = "RestarauntApp"; 
+  
+  final String cloudName = dotenv.env['CLOUDINARY_CLOUD_NAME'] ?? ''; 
+  final String uploadPreset = dotenv.env['CLOUDINARY_UPLOAD_PRESET'] ?? ''; 
 
   // 1. Pick Image from Gallery
   Future<File?> pickImage() async {
@@ -26,28 +26,35 @@ class ImageService {
     }
   }
 
-  // 2. Upload Image to Cloudinary (Free & No Auth Rules needed)
+  // 2. Upload Image to Cloudinary
   Future<String?> uploadImage(File imageFile) async {
+    // 3. Safety Check: Stop if keys are missing
+    if (cloudName.isEmpty || uploadPreset.isEmpty) {
+      print("ERROR: Cloudinary keys are missing! Check your key.env file.");
+      print("Current CloudName: '$cloudName'");
+      print("Current Preset: '$uploadPreset'");
+      return null;
+    }
+
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/upload');
       
-      // Create the POST request
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
-      // Send
       final response = await request.send();
 
       if (response.statusCode == 200) {
         final responseData = await response.stream.toBytes();
         final responseString = String.fromCharCodes(responseData);
         final jsonMap = jsonDecode(responseString);
-        
-        // Return the secure URL of the uploaded image
         return jsonMap['secure_url'];
       } else {
         print('Upload failed with status: ${response.statusCode}');
+        // Optional: Print the response body to see why Cloudinary rejected it
+        final responseBody = await response.stream.bytesToString();
+        print('Response Body: $responseBody'); 
         return null;
       }
     } catch (e) {
