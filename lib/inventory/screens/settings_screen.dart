@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'category_settings_screen.dart'; // We will navigate to this from here
+import 'category_settings_screen.dart'; 
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -54,7 +54,7 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Dark Mode'),
             value: false, // Placeholder value
             onChanged: (bool value) {
-              // Logic to change theme will be added by another dev
+              
             },
           ),
         ],

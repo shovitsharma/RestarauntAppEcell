@@ -1,10 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:untitled2/auth/widgets/form_helpers.dart'; // Reuse the widgets
+import 'package:untitled2/auth/widgets/form_helpers.dart';
+import 'package:untitled2/inventory/models/category.dart';
+import 'package:untitled2/inventory/models/inventory_item_model.dart';
+import 'package:untitled2/inventory/services/inventory_service.dart';
+import 'package:untitled2/inventory/services/image_service.dart'; 
+import 'package:untitled2/utils/snackbar_helper.dart';
 
 class EditItemScreen extends StatefulWidget {
-  // This screen will receive the item data from the list screen
-  final Map<String, dynamic> item;
-
+  final MenuItemModel item;
   const EditItemScreen({super.key, required this.item});
 
   @override
@@ -12,112 +16,206 @@ class EditItemScreen extends StatefulWidget {
 }
 
 class _EditItemScreenState extends State<EditItemScreen> {
-  final _nameController = TextEditingController();
-  final _quantityController = TextEditingController();
-  final _unitController = TextEditingController();
+  final InventoryService _inventoryService = InventoryService();
+  final ImageService _imageService = ImageService();
+
+  late TextEditingController _nameController;
+  late TextEditingController _descController;
+  late TextEditingController _priceController;
+  
+  String? _selectedCategory;
+  bool _isLoading = false;
+  
+  File? _newImageFile; 
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill the text fields with the item's data when the screen loads
-    _nameController.text = widget.item['name'];
-    _quantityController.text = widget.item['quantity'].toString();
-    _unitController.text = widget.item['unit'];
+    
+    _nameController = TextEditingController(text: widget.item.name);
+    _descController = TextEditingController(text: widget.item.description);
+    _priceController = TextEditingController(text: widget.item.price.toString());
+    _selectedCategory = widget.item.category;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _quantityController.dispose();
-    _unitController.dispose();
+    _descController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
-  void _updateItem() {
-  // Create a map of the updated data
-  final updatedItemData = {
-    // You'll need an 'id' to find the item in the list later
-    'id': widget.item['id'], 
-    'name': _nameController.text,
-    'quantity': double.parse(_quantityController.text),
-    'unit': _unitController.text, // For simplicity, we're not using a dropdown here yet
-  };
-  
-  // Pop the screen and pass the updated data back
-  Navigator.of(context).pop({'action': 'update', 'data': updatedItemData});
-}
+  Future<void> _pickImage() async {
+    final File? image = await _imageService.pickImage();
+    if (image != null) {
+      setState(() {
+        _newImageFile = image;
+      });
+    }
+  }
 
-void _deleteItem() {
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Are you sure?'),
-      content: Text('Do you want to permanently delete "${widget.item['name']}"?'),
-      actions: [
-        TextButton(
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.of(ctx).pop(),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
+  Future<void> _updateItem() async {
+    if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
+      showCustomSnackBar(context, message: 'Please fill required fields', isError: true);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    String finalImageUrl = widget.item.imageUrl; 
+
+    try {
+      // 1. Check if user picked a NEW image
+      if (_newImageFile != null) {
+        final newUrl = await _imageService.uploadImage(_newImageFile!);
+        if (newUrl != null) {
+          finalImageUrl = newUrl;
+        }
+      }
+
+      // 2. Prepare Updated Model
+      final updatedItem = MenuItemModel(
+        id: widget.item.id, // Keep original ID
+        name: _nameController.text.trim(),
+        description: _descController.text.trim(),
+        price: double.parse(_priceController.text.trim()),
+        category: _selectedCategory!,
+        imageUrl: finalImageUrl, // Use the determined URL
+        isAvailable: widget.item.isAvailable,
+      );
+
+      // 3. Update in Firestore
+      await _inventoryService.updateMenuItem(updatedItem);
+
+      if (mounted) {
+        Navigator.pop(context);
+        showCustomSnackBar(context, message: 'Item updated successfully');
+      }
+    } catch (e) {
+      if (mounted) showCustomSnackBar(context, message: 'Error: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteItem() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Item?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+             onPressed: () => Navigator.pop(ctx, true), 
+             child: const Text('Delete', style: TextStyle(color: Colors.red))
           ),
-          child: const Text('Delete'),
-          onPressed: () {
-            // Pop the dialog, then pop the screen with a "delete" signal
-            Navigator.of(ctx).pop(); 
-            Navigator.of(context).pop({'action': 'delete', 'id': widget.item['id']});
-          },
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isLoading = true);
+      try {
+        await _inventoryService.deleteMenuItem(widget.item.id);
+        if (mounted) {
+          Navigator.pop(context); // Close Edit Screen
+          showCustomSnackBar(context, message: 'Item deleted');
+        }
+      } catch (e) {
+        if (mounted) showCustomSnackBar(context, message: 'Error: $e', isError: true);
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Helper to determine what image to show
+    ImageProvider? displayImage;
+    if (_newImageFile != null) {
+      displayImage = FileImage(_newImageFile!); 
+    } else if (widget.item.imageUrl.isNotEmpty) {
+      displayImage = NetworkImage(widget.item.imageUrl); 
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Edit ${widget.item['name']}'),
+        title: const Text('Edit Item'),
         actions: [
-          // Add a delete button to the app bar
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            icon: const Icon(Icons.delete, color: Colors.red),
             onPressed: _deleteItem,
-            tooltip: 'Delete Item',
           ),
         ],
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              MyTextField(
-                controller: _nameController,
-                hintText: 'Item Name',
-                obscureText: false,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            // --- IMAGE PICKER ---
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 200,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade400),
+                  image: displayImage != null 
+                    ? DecorationImage(image: displayImage, fit: BoxFit.cover)
+                    : null,
+                ),
+                child: displayImage == null
+                    ? const Center(child: Icon(Icons.camera_alt, size: 50, color: Colors.grey))
+                    : null,
               ),
-              const SizedBox(height: 16),
-              MyTextField(
-                controller: _quantityController,
-                hintText: 'Quantity',
-                obscureText: false,
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              MyTextField(
-                controller: _unitController,
-                hintText: 'Unit',
-                obscureText: false,
-              ),
-              const SizedBox(height: 32),
-              MyButton(
-                onTap: _updateItem,
-                text: 'Update Item',
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            const Text('Tap image to change', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            const SizedBox(height: 24),
+
+            // --- FORM FIELDS ---
+            MyTextField(controller: _nameController, hintText: 'Name', obscureText: false),
+            const SizedBox(height: 16),
+            MyTextField(controller: _descController, hintText: 'Description', obscureText: false),
+            const SizedBox(height: 16),
+            MyTextField(
+               controller: _priceController, 
+               hintText: 'Price', 
+               obscureText: false, 
+               keyboardType: TextInputType.number
+            ),
+            const SizedBox(height: 16),
+
+            // --- CATEGORY DROPDOWN ---
+            StreamBuilder<List<CategoryModel>>(
+              stream: _inventoryService.getCategories(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const SizedBox();
+                final categories = snapshot.data!;
+                
+                return DropdownButtonFormField<String>(
+                  value: categories.any((c) => c.name == _selectedCategory) ? _selectedCategory : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                  ),
+                  items: categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
+                  onChanged: (val) => setState(() => _selectedCategory = val),
+                );
+              }
+            ),
+
+            const SizedBox(height: 32),
+            MyButton(
+              onTap: _updateItem, 
+              text: 'Update Item',
+              isLoading: _isLoading,
+            ),
+          ],
         ),
       ),
     );

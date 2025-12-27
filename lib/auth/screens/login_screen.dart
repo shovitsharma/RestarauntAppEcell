@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:untitled2/utils/snackbar_helper.dart';
-import 'package:untitled2/inventory/screens/inventory_list_screen.dart'; // <-- Correct Import
+import 'package:untitled2/inventory/screens/inventory_list_screen.dart'; 
 import '../services/firebase_auth_service.dart';
 import '../widgets/form_helpers.dart';
 
@@ -23,39 +23,53 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onSendOtp() async {
     _otpController.clear();
+    
     if (_phoneController.text.length < 10) {
       showCustomSnackBar(context, message: 'Please enter a valid 10-digit phone number.', isError: true);
       return;
     }
+    
     setState(() => _isLoading = true);
 
     try {
       String phoneNumber = "+91${_phoneController.text.trim()}";
+      
+      // CALL THE SERVICE
       await _authService.sendOtp(
         phoneNumber: phoneNumber,
         forceResendingToken: _resendToken,
+        
+        // 1. SUCCESS CALLBACK
         onCodeSent: (verificationId, resendToken) {
           if (mounted) {
             setState(() {
               _verificationId = verificationId;
               _resendToken = resendToken;
               _isOtpSent = true;
+              _isLoading = false; 
             });
+            showCustomSnackBar(context, message: 'OTP has been sent!');
           }
-          showCustomSnackBar(context, message: 'OTP has been sent!');
+        },
+        
+        
+        onError: (errorMessage) {
+          if (mounted) {
+            setState(() => _isLoading = false); 
+            showCustomSnackBar(context, message: errorMessage, isError: true);
+          }
         },
       );
-    } on FirebaseAuthException catch (e) {
-      showCustomSnackBar(context, message: e.message ?? 'An unknown Firebase error occurred.', isError: true);
+      
     } catch (e) {
-      showCustomSnackBar(context, message: 'An unknown error occurred. Please try again.', isError: true);
-    } finally {
+     
       if (mounted) {
         setState(() => _isLoading = false);
+        showCustomSnackBar(context, message: 'An unknown error occurred.', isError: true);
       }
     }
-  }
 
+  }
   void _onVerifyOtp() async {
   if (_verificationId == null || _otpController.text.isEmpty) {
     showCustomSnackBar(context, message: 'Please enter the OTP.', isError: true);
@@ -116,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // This is the UI from your teammate, which is correct.
+    
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart'; // <-- 1. IMPORT GOOGLE FONTS
 import 'package:firebase_core/firebase_core.dart';
 import 'package:untitled2/auth/screens/splash_screen.dart';
 import 'package:untitled2/inventory/screens/inventory_list_screen.dart';
+import 'package:untitled2/inventory/screens/settings_screen.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -52,7 +53,7 @@ class MyApp extends StatelessWidget {
         
         useMaterial3: true,
       ),
-      home: const InventoryListScreen(),
+      home: const SplashScreen(),
     );
   }
 }

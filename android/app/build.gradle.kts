@@ -7,6 +7,11 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+configurations.all {
+    resolutionStrategy {
+        force("androidx.activity:activity:1.10.0")
+    }
+}
 
 android {
     namespace = "com.example.untitled2"
